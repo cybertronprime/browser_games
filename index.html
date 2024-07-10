@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Realistic Forest Explorer</title>
+    <title>Enhanced Realistic Forest Explorer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
@@ -20,7 +21,7 @@
             background-color: rgba(0,0,0,0.5); color: #fff; padding: 10px;
             border-radius: 5px; font-size: 16px;
         }
-        #ammo { align-self: flex-end; }
+        #ammo, #health { align-self: flex-end; margin-bottom: 10px; }
         #controls { align-self: center; text-align: center; }
         #crosshair {
             position: absolute; top: 50%; left: 50%;
@@ -43,239 +44,344 @@
 <body>
     <div id="gameContainer">
         <div id="uiOverlay">
+            <div id="health" class="ui-element">Health: 100</div>
             <div id="ammo" class="ui-element">Ammo: 30</div>
-            <div id="controls" class="ui-element">WASD to move, Mouse to look, Left Click to shoot</div>
+            <div id="controls" class="ui-element">WASD to move, Mouse to look, Left Click to shoot, R to reload</div>
         </div>
         <img id="crosshair" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABCSURBVDhPY/j//z8DLQETlKYZGDUQD6C/gf+xYGzqCNqCzzCYOC4xogDdfZSyGdVAWmIcBqKTDDYxogBdHc3yIQMDAKuogJ9Jv1vqAAAAAElFTkSuQmCC" alt="Crosshair">
         <div id="startScreen">
-            <h1>Realistic Forest Explorer</h1>
-            <button id="startButton">Start Game</button>
+            <h1>Enhanced Realistic Forest Explorer</h1>
+            <button id="startButton" disabled>Loading...</button>
         </div>
     </div>
 
     <script>
-        let scene, camera, renderer, controls, player, mixer, clock;
-        let trees = [], bullets = [];
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let ammo = 30;
-        let playerGun, shootingAction;
+        const Game = {
+            scene: null,
+            camera: null,
+            renderer: null,
+            controls: null,
+            player: null,
+            mixer: null,
+            clock: null,
+            trees: [],
+            bullets: [],
+            moveForward: false,
+            moveBackward: false,
+            moveLeft: false,
+            moveRight: false,
+            ammo: 30,
+            maxAmmo: 30,
+            health: 100,
+            playerGun: null,
+            shootingSound: null,
+            reloadSound: null,
 
-        const loadingManager = new THREE.LoadingManager();
-        const textureLoader = new THREE.TextureLoader(loadingManager);
-        const gltfLoader = new THREE.GLTFLoader(loadingManager);
+            init() {
+                this.initScene();
+                this.initLighting();
+                this.initSkybox();
+                this.initGround();
+                this.loadPlayerModel();
+                this.createTrees();
+                this.setupEventListeners();
+                this.initSounds();
+            },
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x89b2eb, 0.002);
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x89b2eb, 0.002);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.y = 1.6;
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.y = 1.6;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.getElementById('gameContainer').appendChild(renderer.domElement);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('gameContainer').appendChild(this.renderer.domElement);
 
-            controls = new THREE.PointerLockControls(camera, renderer.domElement);
+                this.clock = new THREE.Clock();
 
-            clock = new THREE.Clock();
+                // Ensure PointerLockControls is available
+                if (typeof THREE.PointerLockControls !== 'function') {
+                    console.error('PointerLockControls not loaded. Please check your Three.js version and included scripts.');
+                    return;
+                }
+                this.controls = new THREE.PointerLockControls(this.camera, this.renderer.domElement);
+            },
 
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0x404040);
-            scene.add(ambientLight);
+            initLighting() {
+                const ambientLight = new THREE.AmbientLight(0x404040);
+                this.scene.add(ambientLight);
 
-            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            sunLight.position.set(100, 100, 0);
-            sunLight.castShadow = true;
-            sunLight.shadow.mapSize.width = 2048;
-            sunLight.shadow.mapSize.height = 2048;
-            scene.add(sunLight);
+                const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                sunLight.position.set(100, 100, 0);
+                sunLight.castShadow = true;
+                sunLight.shadow.mapSize.width = 2048;
+                sunLight.shadow.mapSize.height = 2048;
+                this.scene.add(sunLight);
+            },
 
-            // Skybox
-            const skyboxTexture = textureLoader.load('https://threejsfundamentals.org/threejs/resources/images/equirectangularmaps/tears_of_steel_bridge_2k.jpg');
-            const skyboxGeometry = new THREE.SphereGeometry(500, 60, 40);
-            const skyboxMaterial = new THREE.MeshBasicMaterial({ map: skyboxTexture, side: THREE.BackSide });
-            const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
-            scene.add(skybox);
+            initSkybox() {
+                const textureLoader = new THREE.TextureLoader();
+                const skyboxTexture = textureLoader.load('https://threejsfundamentals.org/threejs/resources/images/equirectangularmaps/tears_of_steel_bridge_2k.jpg', 
+                    undefined, 
+                    undefined, 
+                    (error) => console.error('An error occurred while loading the skybox texture:', error)
+                );
+                const skyboxGeometry = new THREE.SphereGeometry(500, 60, 40);
+                const skyboxMaterial = new THREE.MeshBasicMaterial({ map: skyboxTexture, side: THREE.BackSide });
+                const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+                this.scene.add(skybox);
+            },
 
-            // Ground
-            const groundTexture = textureLoader.load('https://threejsfundamentals.org/threejs/resources/images/checker.png');
-            groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
-            groundTexture.repeat.set(100, 100);
-            groundTexture.anisotropy = 16;
+            initGround() {
+                const textureLoader = new THREE.TextureLoader();
+                const groundTexture = textureLoader.load('https://threejsfundamentals.org/threejs/resources/images/checker.png', 
+                    undefined, 
+                    undefined, 
+                    (error) => console.error('An error occurred while loading the ground texture:', error)
+                );
+                groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
+                groundTexture.repeat.set(100, 100);
+                groundTexture.anisotropy = 16;
 
-            const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
-            const groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), groundMaterial);
-            groundMesh.rotation.x = -Math.PI / 2;
-            groundMesh.receiveShadow = true;
-            scene.add(groundMesh);
+                const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
+                const groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(1000, 1000), groundMaterial);
+                groundMesh.rotation.x = -Math.PI / 2;
+                groundMesh.receiveShadow = true;
+                this.scene.add(groundMesh);
+            },
 
-            // Load player model (Three.js mascot - robot)
-            gltfLoader.load('https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb', (gltf) => {
-                player = gltf.scene;
-                player.scale.set(0.5, 0.5, 0.5);
-                player.position.set(0, 0, -2);
-                camera.add(player);
+            loadPlayerModel() {
+                const loader = new THREE.GLTFLoader();
+                loader.load('https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb', 
+                    (gltf) => {
+                        this.player = gltf.scene;
+                        this.player.scale.set(0.5, 0.5, 0.5);
+                        this.player.position.set(0, 0, -2);
+                        this.camera.add(this.player);
 
-                mixer = new THREE.AnimationMixer(player);
-                const idleAction = mixer.clipAction(gltf.animations[0]);
-                idleAction.play();
+                        this.mixer = new THREE.AnimationMixer(this.player);
+                        const idleAction = this.mixer.clipAction(gltf.animations[0]);
+                        idleAction.play();
 
-                // Add gun to player's hand
+                        this.addPlayerGun();
+                        this.scene.add(this.camera);
+                        document.getElementById('startButton').disabled = false;
+                        document.getElementById('startButton').textContent = 'Start Game';
+                    },
+                    undefined,
+                    (error) => console.error('An error occurred while loading the player model:', error)
+                );
+            },
+
+            addPlayerGun() {
                 const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.3);
                 const gunMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
-                playerGun = new THREE.Mesh(gunGeometry, gunMaterial);
-                playerGun.position.set(0.3, -0.1, -0.5);
-                camera.add(playerGun);
+                this.playerGun = new THREE.Mesh(gunGeometry, gunMaterial);
+                this.playerGun.position.set(0.3, -0.1, -0.5);
+                this.camera.add(this.playerGun);
+            },
 
-                scene.add(camera);
-            });
+            createTrees() {
+                const treeGeometry = new THREE.ConeGeometry(1, 4, 6);
+                const treeMaterial = new THREE.MeshLambertMaterial({ color: 0x2d4c1e });
 
-            // Create trees
-            const treeGeometry = new THREE.ConeGeometry(1, 4, 6);
-            const treeMaterial = new THREE.MeshLambertMaterial({ color: 0x2d4c1e });
-
-            for (let i = 0; i < 200; i++) {
-                const tree = new THREE.Mesh(treeGeometry, treeMaterial);
-                tree.position.set(
-                    Math.random() * 200 - 100,
-                    2,
-                    Math.random() * 200 - 100
-                );
-                tree.castShadow = true;
-                tree.receiveShadow = true;
-                scene.add(tree);
-                trees.push(tree);
-            }
-
-            // Event listeners
-            document.addEventListener('keydown', onKeyDown);
-            document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('click', onMouseClick);
-            window.addEventListener('resize', onWindowResize);
-
-            document.getElementById('startButton').addEventListener('click', startGame);
-
-            loadingManager.onLoad = () => {
-                document.getElementById('startButton').disabled = false;
-            };
-        }
-
-        function startGame() {
-            document.getElementById('startScreen').style.display = 'none';
-            controls.lock();
-        }
-
-        function onKeyDown(event) {
-            switch (event.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyD': moveRight = true; break;
-            }
-        }
-
-        function onKeyUp(event) {
-            switch (event.code) {
-                case 'KeyW': moveForward = false; break;
-                case 'KeyS': moveBackward = false; break;
-                case 'KeyA': moveLeft = false; break;
-                case 'KeyD': moveRight = false; break;
-            }
-        }
-
-        function onMouseClick() {
-            if (controls.isLocked && ammo > 0) {
-                shoot();
-                ammo--;
-                updateUI();
-            }
-        }
-
-        function shoot() {
-            const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
-            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
-
-            bullet.position.set(
-                camera.position.x,
-                camera.position.y,
-                camera.position.z
-            );
-
-            bullet.velocity = new THREE.Vector3(
-                -Math.sin(camera.rotation.y),
-                0,
-                -Math.cos(camera.rotation.y)
-            );
-
-            scene.add(bullet);
-            bullets.push(bullet);
-
-            // Gun recoil animation
-            const recoilTween = new TWEEN.Tween(playerGun.rotation)
-                .to({ x: -0.2 }, 50)
-                .easing(TWEEN.Easing.Quadratic.Out)
-                .onComplete(() => {
-                    new TWEEN.Tween(playerGun.rotation)
-                        .to({ x: 0 }, 100)
-                        .easing(TWEEN.Easing.Quadratic.InOut)
-                        .start();
-                })
-                .start();
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function updateUI() {
-            document.getElementById('ammo').textContent = `Ammo: ${ammo}`;
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const delta = clock.getDelta();
-
-            if (controls.isLocked) {
-                const speed = 5;
-                const velocity = new THREE.Vector3();
-
-                if (moveForward) velocity.z -= speed * delta;
-                if (moveBackward) velocity.z += speed * delta;
-                if (moveLeft) velocity.x -= speed * delta;
-                if (moveRight) velocity.x += speed * delta;
-
-                controls.moveRight(velocity.x);
-                controls.moveForward(velocity.z);
-            }
-
-            // Update bullets
-            for (let i = 0; i < bullets.length; i++) {
-                bullets[i].position.add(bullets[i].velocity);
-
-                // Remove bullets that have travelled too far
-                if (bullets[i].position.length() > 100) {
-                    scene.remove(bullets[i]);
-                    bullets.splice(i, 1);
-                    i--;
+                for (let i = 0; i < 200; i++) {
+                    const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+                    tree.position.set(
+                        Math.random() * 200 - 100,
+                        2,
+                        Math.random() * 200 - 100
+                    );
+                    tree.castShadow = true;
+                    tree.receiveShadow = true;
+                    this.scene.add(tree);
+                    this.trees.push(tree);
                 }
+            },
+
+            initSounds() {
+                this.shootingSound = new Howl({
+                    src: ['https://assets.codepen.io/241738/laser.mp3'],
+                    volume: 0.5
+                });
+
+                this.reloadSound = new Howl({
+                    src: ['https://assets.codepen.io/241738/reload.mp3'],
+                    volume: 0.5
+                });
+            },
+
+            setupEventListeners() {
+                document.addEventListener('keydown', this.onKeyDown.bind(this));
+                document.addEventListener('keyup', this.onKeyUp.bind(this));
+                document.addEventListener('click', this.onMouseClick.bind(this));
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+                document.getElementById('startButton').addEventListener('click', this.startGame.bind(this));
+            },
+
+            startGame() {
+                document.getElementById('startScreen').style.display = 'none';
+                this.controls.lock();
+            },
+
+            onKeyDown(event) {
+                switch (event.code) {
+                    case 'KeyW': this.moveForward = true; break;
+                    case 'KeyS': this.moveBackward = true; break;
+                    case 'KeyA': this.moveLeft = true; break;
+                    case 'KeyD': this.moveRight = true; break;
+                    case 'KeyR': this.reload(); break;
+                }
+            },
+
+            onKeyUp(event) {
+                switch (event.code) {
+                    case 'KeyW': this.moveForward = false; break;
+                    case 'KeyS': this.moveBackward = false; break;
+                    case 'KeyA': this.moveLeft = false; break;
+                    case 'KeyD': this.moveRight = false; break;
+                }
+            },
+
+            onMouseClick() {
+                if (this.controls.isLocked && this.ammo > 0) {
+                    this.shoot();
+                    this.ammo--;
+                    this.updateUI();
+                }
+            },
+
+            shoot() {
+                this.shootingSound.play();
+                const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+                const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+
+                bullet.position.set(
+                    this.camera.position.x,
+                    this.camera.position.y,
+                    this.camera.position.z
+                );
+
+                bullet.velocity = new THREE.Vector3(
+                    -Math.sin(this.camera.rotation.y),
+                    0,
+                    -Math.cos(this.camera.rotation.y)
+                );
+
+                this.scene.add(bullet);
+                this.bullets.push(bullet);
+
+                // Gun recoil animation
+                new TWEEN.Tween(this.playerGun.rotation)
+                    .to({ x: -0.2 }, 50)
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .onComplete(() => {
+                        new TWEEN.Tween(this.playerGun.rotation)
+                            .to({ x: 0 }, 100)
+                            .easing(TWEEN.Easing.Quadratic.InOut)
+                            .start();
+                    })
+                    .start();
+            },
+
+            reload() {
+                if (this.ammo < this.maxAmmo) {
+                    this.reloadSound.play();
+                    this.ammo = this.maxAmmo;
+                    this.updateUI();
+                }
+            },
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            },
+
+            updateUI() {
+                document.getElementById('ammo').textContent = `Ammo: ${this.ammo}`;
+                document.getElementById('health').textContent = `Health: ${this.health}`;
+            },
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+
+                const delta = this.clock.getDelta();
+
+                if (this.controls.isLocked) {
+                    const speed = 5;
+                    const velocity = new THREE.Vector3();
+
+                    if (this.moveForward) velocity.z -= speed * delta;
+                    if (this.moveBackward) velocity.z += speed * delta;
+                    if (this.moveLeft) velocity.x -= speed * delta;
+                    if (this.moveRight) velocity.x += speed * delta;
+
+                    this.controls.moveRight(velocity.x);
+                    this.controls.moveForward(velocity.z);
+
+                    // Update bullets
+                    for (let i = 0; i < this.bullets.length; i++) {
+                        this.bullets[i].position.add(this.bullets[i].velocity);
+
+                        // Check for collisions with trees
+                        for (let j = 0; j < this.trees.length; j++) {
+                            if (this.bullets[i].position.distanceTo(this.trees[j].position) < 1) {
+                                this.scene.remove(this.bullets[i]);
+                                this.bullets.splice(i, 1);
+                                i--;
+                                break;
+                            }
+                        }
+
+                        // Remove bullets that have travelled too far
+                        if (this.bullets[i] && this.bullets[i].position.length() > 100) {
+                            this.scene.remove(this.bullets[i]);
+                            this.bullets.splice(i, 1);
+                            i--;
+                        }
+                    }
+
+                    // Rotate trees to face the camera
+                    this.trees.forEach(tree => {
+                        tree.lookAt(this.camera.position);
+                    });
+
+                    // Check for collisions with trees
+                    const playerPosition = this.camera.position.clone();
+                    playerPosition.y = 2; // Adjust to match tree base height
+                    this.trees.forEach(tree => {
+                        if (playerPosition.distanceTo(tree.position) < 1.5) {
+                            // Push the player away from the tree
+                            const pushVector = playerPosition.clone().sub(tree.position).normalize();
+                            this.controls.moveRight(pushVector.x * speed * delta);
+                            this.controls.moveForward(-pushVector.z * speed * delta);
+                        }
+                    });
+                }
+
+                // Update character animations
+                if (this.mixer) {
+                    this.mixer.update(delta);
+                }
+
+                // Update tweens
+                TWEEN.update();
+
+                // Render the scene
+                this.renderer.render(this.scene, this.camera);
             }
+        };
 
-            if (mixer) mixer.update(delta);
-
-            TWEEN.update();
-
-            renderer.render(scene, camera);
-        }
-
-        init();
-        animate();
+        // Initialize and start the game
+        Game.init();
+        Game.animate();
     </script>
 </body>
 </html>

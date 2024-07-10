@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Immersive 3D World</title>
+    <title>Enhanced Immersive 3D World</title>
     <style>
         body, html {
             margin: 0;
@@ -11,6 +11,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            font-family: Arial, sans-serif;
         }
         #gameContainer {
             width: 100%;
@@ -24,46 +25,44 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        #healthBar, #stamina {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+        .bar {
             width: 200px;
             height: 20px;
             background-color: rgba(0, 0, 0, 0.5);
             border-radius: 10px;
             overflow: hidden;
-        }
-        #stamina {
-            top: 50px;
+            margin-bottom: 10px;
         }
         #healthFill, #staminaFill {
-            width: 100%;
             height: 100%;
-            background-color: #ff3333;
+            width: 100%;
             transition: width 0.3s ease;
+        }
+        #healthFill {
+            background-color: #ff3333;
         }
         #staminaFill {
             background-color: #33cc33;
         }
         #inventory {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            padding: 10px;
             background-color: rgba(0, 0, 0, 0.5);
             color: white;
             border-radius: 5px;
+            padding: 10px;
+            align-self: flex-start;
         }
         #minimap {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             width: 150px;
             height: 150px;
             background-color: rgba(0, 0, 0, 0.5);
             border-radius: 50%;
+            align-self: flex-end;
         }
         #startScreen {
             position: absolute;
@@ -71,7 +70,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -79,34 +78,41 @@
             color: white;
         }
         #startButton {
-            padding: 10px 20px;
+            padding: 15px 30px;
             font-size: 18px;
             background-color: #4CAF50;
             color: white;
             border: none;
+            border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         #startButton:hover {
             background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="uiOverlay">
-            <div id="healthBar"><div id="healthFill"></div></div>
-            <div id="stamina"><div id="staminaFill"></div></div>
+            <div>
+                <div class="bar"><div id="healthFill"></div></div>
+                <div class="bar"><div id="staminaFill"></div></div>
+            </div>
             <div id="inventory">Inventory</div>
             <div id="minimap"></div>
         </div>
         <div id="startScreen">
-            <h1>Immersive 3D World</h1>
-            <button id="startButton">Start Game</button>
+            <h1>Enhanced Immersive 3D World</h1>
+            <button id="startButton">Start Adventure</button>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <script>
         const Game = {
             scene: null,
@@ -116,15 +122,19 @@
             npcs: [],
             controls: null,
             clock: null,
+            simplex: null,
 
             init() {
                 this.scene = new THREE.Scene();
                 this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.renderer = new THREE.WebGLRenderer();
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 document.getElementById('gameContainer').appendChild(this.renderer.domElement);
 
                 this.clock = new THREE.Clock();
+                this.simplex = new SimplexNoise();
 
                 this.createEnvironment();
                 this.createPlayer();
@@ -133,30 +143,57 @@
                 this.setupControls();
 
                 window.addEventListener('resize', () => this.onWindowResize(), false);
-
                 document.getElementById('startButton').addEventListener('click', () => this.startGame());
 
                 this.animate();
             },
 
             createEnvironment() {
+                // Skybox
+                const loader = new THREE.CubeTextureLoader();
+                const texture = loader.load([
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/px.jpg',
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/nx.jpg',
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/py.jpg',
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/ny.jpg',
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/pz.jpg',
+                    'https://threejsfundamentals.org/threejs/resources/images/skybox/nz.jpg',
+                ]);
+                this.scene.background = texture;
+
                 // Ground
-                const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-                const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x1a8f3c });
+                const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
+                const groundMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a8f3c,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
                 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
                 ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+
+                // Apply noise to the ground
+                const vertices = ground.geometry.attributes.position.array;
+                for (let i = 0; i <= vertices.length; i += 3) {
+                    vertices[i+2] = this.simplex.noise2D(vertices[i]/100, vertices[i+1]/100) * 5;
+                }
+                ground.geometry.attributes.position.needsUpdate = true;
+                ground.geometry.computeVertexNormals();
+
                 this.scene.add(ground);
 
                 // Trees
-                for (let i = 0; i < 100; i++) {
-                    const treeGeometry = new THREE.ConeGeometry(2, 8, 8);
-                    const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x2d4c1e });
+                const treeGeometry = new THREE.ConeGeometry(2, 8, 8);
+                const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x2d4c1e });
+                for (let i = 0; i < 200; i++) {
                     const tree = new THREE.Mesh(treeGeometry, treeMaterial);
                     tree.position.set(
                         Math.random() * 200 - 100,
                         4,
                         Math.random() * 200 - 100
                     );
+                    tree.castShadow = true;
+                    tree.receiveShadow = true;
                     this.scene.add(tree);
                 }
             },
@@ -166,21 +203,25 @@
                 const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
                 this.player = new THREE.Mesh(geometry, material);
                 this.player.position.set(0, 1, 0);
+                this.player.castShadow = true;
+                this.player.receiveShadow = true;
                 this.scene.add(this.player);
-                this.camera.position.set(0, 2, 5);
-                this.player.add(this.camera);
+                this.camera.position.set(0, 3, 5);
+                this.camera.lookAt(this.player.position);
             },
 
             createNPCs() {
-                for (let i = 0; i < 10; i++) {
-                    const geometry = new THREE.BoxGeometry(1, 2, 1);
-                    const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                const geometry = new THREE.BoxGeometry(1, 2, 1);
+                const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                for (let i = 0; i < 20; i++) {
                     const npc = new THREE.Mesh(geometry, material);
                     npc.position.set(
-                        Math.random() * 40 - 20,
+                        Math.random() * 80 - 40,
                         1,
-                        Math.random() * 40 - 20
+                        Math.random() * 80 - 40
                     );
+                    npc.castShadow = true;
+                    npc.receiveShadow = true;
                     this.scene.add(npc);
                     this.npcs.push(npc);
                 }
@@ -191,7 +232,12 @@
                 this.scene.add(ambientLight);
 
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                directionalLight.position.set(10, 20, 10);
+                directionalLight.position.set(100, 100, 0);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 1;
+                directionalLight.shadow.camera.far = 500;
                 this.scene.add(directionalLight);
             },
 
@@ -257,17 +303,23 @@
             },
 
             movePlayer() {
-                const speed = 0.1;
+                const speed = 0.15;
                 if (this.controls.moveForward) this.player.position.z -= speed;
                 if (this.controls.moveBackward) this.player.position.z += speed;
                 if (this.controls.moveLeft) this.player.position.x -= speed;
                 if (this.controls.moveRight) this.player.position.x += speed;
+                
+                // Update camera position
+                this.camera.position.x = this.player.position.x;
+                this.camera.position.z = this.player.position.z + 5;
+                this.camera.lookAt(this.player.position);
             },
 
             moveNPCs() {
                 this.npcs.forEach(npc => {
                     npc.position.x += (Math.random() - 0.5) * 0.1;
                     npc.position.z += (Math.random() - 0.5) * 0.1;
+                    npc.rotation.y += 0.02;
                 });
             },
 
@@ -284,8 +336,14 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
 
+                const delta = this.clock.getDelta();
+
                 this.movePlayer();
                 this.moveNPCs();
+
+                // Update UI
+                document.getElementById('healthFill').style.width = '80%';
+                document.getElementById('staminaFill').style.width = '60%';
 
                 this.renderer.render(this.scene, this.camera);
             }

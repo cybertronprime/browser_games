@@ -30,6 +30,8 @@
             justify-content: space-between;
             padding: 20px;
             box-sizing: border-box;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
         }
         .bar {
             width: 200px;
@@ -39,23 +41,19 @@
             overflow: hidden;
             margin-bottom: 10px;
         }
-        #healthFill, #staminaFill {
+        #healthFill, #staminaFill, #expFill {
             height: 100%;
             width: 100%;
             transition: width 0.3s ease;
         }
-        #healthFill {
-            background-color: #ff3333;
-        }
-        #staminaFill {
-            background-color: #33cc33;
-        }
-        #inventory {
+        #healthFill { background-color: #ff3333; }
+        #staminaFill { background-color: #33cc33; }
+        #expFill { background-color: #3333ff; }
+        #inventory, #questTracker, #weather {
             background-color: rgba(0, 0, 0, 0.5);
-            color: white;
             border-radius: 5px;
             padding: 10px;
-            align-self: flex-start;
+            margin: 5px;
         }
         #minimap {
             width: 150px;
@@ -63,6 +61,26 @@
             background-color: rgba(0, 0, 0, 0.5);
             border-radius: 50%;
             align-self: flex-end;
+        }
+        #dayNightCycle {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(to bottom, #87CEEB, #FFA500);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        #sun {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: yellow;
+            border-radius: 50%;
+            top: 10px;
+            left: 40px;
         }
         #startScreen {
             position: absolute;
@@ -98,11 +116,15 @@
 <body>
     <div id="gameContainer">
         <div id="uiOverlay">
+            <div id="dayNightCycle"><div id="sun"></div></div>
             <div>
                 <div class="bar"><div id="healthFill"></div></div>
                 <div class="bar"><div id="staminaFill"></div></div>
+                <div class="bar"><div id="expFill"></div></div>
             </div>
             <div id="inventory">Inventory</div>
+            <div id="questTracker">Quests</div>
+            <div id="weather">Weather: Sunny</div>
             <div id="minimap"></div>
         </div>
         <div id="startScreen">
@@ -114,242 +136,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <script>
-        const Game = {
-            scene: null,
-            camera: null,
-            renderer: null,
-            player: null,
-            npcs: [],
-            controls: null,
-            clock: null,
-            simplex: null,
-
-            init() {
-                this.scene = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                this.renderer = new THREE.WebGLRenderer({ antialias: true });
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.shadowMap.enabled = true;
-                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                document.getElementById('gameContainer').appendChild(this.renderer.domElement);
-
-                this.clock = new THREE.Clock();
-                this.simplex = new SimplexNoise();
-
-                this.createEnvironment();
-                this.createPlayer();
-                this.createNPCs();
-                this.setupLighting();
-                this.setupControls();
-
-                window.addEventListener('resize', () => this.onWindowResize(), false);
-                document.getElementById('startButton').addEventListener('click', () => this.startGame());
-
-                this.animate();
-            },
-
-            createEnvironment() {
-                // Skybox
-                const loader = new THREE.CubeTextureLoader();
-                const texture = loader.load([
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/px.jpg',
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/nx.jpg',
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/py.jpg',
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/ny.jpg',
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/pz.jpg',
-                    'https://threejsfundamentals.org/threejs/resources/images/skybox/nz.jpg',
-                ]);
-                this.scene.background = texture;
-
-                // Ground
-                const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
-                const groundMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0x1a8f3c,
-                    roughness: 0.8,
-                    metalness: 0.2
-                });
-                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-                ground.rotation.x = -Math.PI / 2;
-                ground.receiveShadow = true;
-
-                // Apply noise to the ground
-                const vertices = ground.geometry.attributes.position.array;
-                for (let i = 0; i <= vertices.length; i += 3) {
-                    vertices[i+2] = this.simplex.noise2D(vertices[i]/100, vertices[i+1]/100) * 5;
-                }
-                ground.geometry.attributes.position.needsUpdate = true;
-                ground.geometry.computeVertexNormals();
-
-                this.scene.add(ground);
-
-                // Trees
-                const treeGeometry = new THREE.ConeGeometry(2, 8, 8);
-                const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x2d4c1e });
-                for (let i = 0; i < 200; i++) {
-                    const tree = new THREE.Mesh(treeGeometry, treeMaterial);
-                    tree.position.set(
-                        Math.random() * 200 - 100,
-                        4,
-                        Math.random() * 200 - 100
-                    );
-                    tree.castShadow = true;
-                    tree.receiveShadow = true;
-                    this.scene.add(tree);
-                }
-            },
-
-            createPlayer() {
-                const geometry = new THREE.BoxGeometry(1, 2, 1);
-                const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-                this.player = new THREE.Mesh(geometry, material);
-                this.player.position.set(0, 1, 0);
-                this.player.castShadow = true;
-                this.player.receiveShadow = true;
-                this.scene.add(this.player);
-                this.camera.position.set(0, 3, 5);
-                this.camera.lookAt(this.player.position);
-            },
-
-            createNPCs() {
-                const geometry = new THREE.BoxGeometry(1, 2, 1);
-                const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                for (let i = 0; i < 20; i++) {
-                    const npc = new THREE.Mesh(geometry, material);
-                    npc.position.set(
-                        Math.random() * 80 - 40,
-                        1,
-                        Math.random() * 80 - 40
-                    );
-                    npc.castShadow = true;
-                    npc.receiveShadow = true;
-                    this.scene.add(npc);
-                    this.npcs.push(npc);
-                }
-            },
-
-            setupLighting() {
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                this.scene.add(ambientLight);
-
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                directionalLight.position.set(100, 100, 0);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
-                directionalLight.shadow.camera.near = 1;
-                directionalLight.shadow.camera.far = 500;
-                this.scene.add(directionalLight);
-            },
-
-            setupControls() {
-                this.controls = {
-                    moveForward: false,
-                    moveBackward: false,
-                    moveLeft: false,
-                    moveRight: false,
-                    jump: false
-                };
-
-                document.addEventListener('keydown', (event) => this.onKeyDown(event), false);
-                document.addEventListener('keyup', (event) => this.onKeyUp(event), false);
-            },
-
-            onKeyDown(event) {
-                switch (event.code) {
-                    case 'ArrowUp':
-                    case 'KeyW':
-                        this.controls.moveForward = true;
-                        break;
-                    case 'ArrowLeft':
-                    case 'KeyA':
-                        this.controls.moveLeft = true;
-                        break;
-                    case 'ArrowDown':
-                    case 'KeyS':
-                        this.controls.moveBackward = true;
-                        break;
-                    case 'ArrowRight':
-                    case 'KeyD':
-                        this.controls.moveRight = true;
-                        break;
-                    case 'Space':
-                        this.controls.jump = true;
-                        break;
-                }
-            },
-
-            onKeyUp(event) {
-                switch (event.code) {
-                    case 'ArrowUp':
-                    case 'KeyW':
-                        this.controls.moveForward = false;
-                        break;
-                    case 'ArrowLeft':
-                    case 'KeyA':
-                        this.controls.moveLeft = false;
-                        break;
-                    case 'ArrowDown':
-                    case 'KeyS':
-                        this.controls.moveBackward = false;
-                        break;
-                    case 'ArrowRight':
-                    case 'KeyD':
-                        this.controls.moveRight = false;
-                        break;
-                    case 'Space':
-                        this.controls.jump = false;
-                        break;
-                }
-            },
-
-            movePlayer() {
-                const speed = 0.15;
-                if (this.controls.moveForward) this.player.position.z -= speed;
-                if (this.controls.moveBackward) this.player.position.z += speed;
-                if (this.controls.moveLeft) this.player.position.x -= speed;
-                if (this.controls.moveRight) this.player.position.x += speed;
-                
-                // Update camera position
-                this.camera.position.x = this.player.position.x;
-                this.camera.position.z = this.player.position.z + 5;
-                this.camera.lookAt(this.player.position);
-            },
-
-            moveNPCs() {
-                this.npcs.forEach(npc => {
-                    npc.position.x += (Math.random() - 0.5) * 0.1;
-                    npc.position.z += (Math.random() - 0.5) * 0.1;
-                    npc.rotation.y += 0.02;
-                });
-            },
-
-            onWindowResize() {
-                this.camera.aspect = window.innerWidth / window.innerHeight;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-            },
-
-            startGame() {
-                document.getElementById('startScreen').style.display = 'none';
-            },
-
-            animate() {
-                requestAnimationFrame(() => this.animate());
-
-                const delta = this.clock.getDelta();
-
-                this.movePlayer();
-                this.moveNPCs();
-
-                // Update UI
-                document.getElementById('healthFill').style.width = '80%';
-                document.getElementById('staminaFill').style.width = '60%';
-
-                this.renderer.render(this.scene, this.camera);
-            }
-        };
-
-        window.onload = () => Game.init();
+        // Game code will go here
     </script>
 </body>
 </html>

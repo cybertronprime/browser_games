@@ -3,45 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Realistic Forest Explorer</title>
+    <title>3D Forest Explorer Game</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="uiOverlay">
-            <div id="topBar">
-                <div id="health" class="ui-element">
-                    <div id="healthBar"></div>
-                    <span id="healthText">100</span>
-                </div>
-                <div id="stamina" class="ui-element">
-                    <div id="staminaBar"></div>
-                    <span id="staminaText">100</span>
-                </div>
+    <div id="game-container"></div>
+    
+    <div id="ui-overlay">
+        <div id="top-left">
+            <div id="health-bar">
+                <div id="health-fill"></div>
             </div>
-            <div id="bottomBar">
-                <div id="ammo" class="ui-element">Ammo: 30 / 30</div>
-                <div id="compass" class="ui-element">N</div>
+            <div id="stamina-bar">
+                <div id="stamina-fill"></div>
             </div>
         </div>
-        <div id="crosshair"></div>
-        <div id="interactionPrompt" class="ui-element">Press E to interact</div>
-        <div id="startScreen">
-            <h1>Realistic Forest Explorer</h1>
-            <button id="startButton" disabled>Loading...</button>
+        <div id="top-right">
+            <div id="minimap"></div>
         </div>
-        <div id="loadingScreen">
-            <div id="loadingBar">
-                <div id="loadingProgress"></div>
-            </div>
-            <div id="loadingText">Loading assets: 0%</div>
+        <div id="bottom-left">
+            <div id="inventory"></div>
+        </div>
+        <div id="bottom-right">
+            <div id="action-menu"></div>
         </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
-    <script src="game.js"></script>
+
+    <div id="loading-screen">
+        <div id="loading-box">
+            <h2>Loading Game...</h2>
+            <div id="loading-bar">
+                <div id="loading-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <div id="start-menu">
+            <h1>3D Forest Explorer</h1>
+            <button id="start-button">Start Game</button>
+            <button id="options-button">Options</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.138.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.138.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="game.js"></script>
 </body>
 </html>

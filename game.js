@@ -98,38 +98,30 @@ class EtherealQuest {
         document.addEventListener('mousemove', (event) => this.onMouseMove(event), false);
         document.addEventListener('click', (event) => this.onMouseClick(event), false);
     }
+async loadAssets() {
+    // Placeholder for player model
+    this.playerModel = new THREE.Group();
+    const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+    const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x3498db });
+    this.playerModel.add(new THREE.Mesh(playerGeometry, playerMaterial));
 
-    async loadAssets() {
-        const loader = new THREE.GLTFLoader();
-        const textureLoader = new THREE.TextureLoader();
+    // Placeholder for NPC models
+    this.npcModels = [
+        new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0xe74c3c })),
+        new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0x2ecc71 })),
+        new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0xf1c40f }))
+    ];
 
-        // Load player model
-        this.playerModel = await loader.loadAsync('path/to/player/model.glb');
-        
-        // Load NPC models
-        this.npcModels = await Promise.all([
-            loader.loadAsync('path/to/npc1/model.glb'),
-            loader.loadAsync('path/to/npc2/model.glb'),
-            loader.loadAsync('path/to/npc3/model.glb')
-        ]);
+    // Placeholder textures
+    this.environmentTextures = {
+        ground: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=='),
+        trees: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=='),
+        water: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==')
+    };
 
-        // Load environment textures
-        this.environmentTextures = {
-            ground: await textureLoader.loadAsync('path/to/ground/texture.jpg'),
-            trees: await textureLoader.loadAsync('path/to/tree/texture.jpg'),
-            water: await textureLoader.loadAsync('path/to/water/texture.jpg')
-        };
-
-        // Load skybox textures
-        this.skyboxTextures = await Promise.all([
-            textureLoader.loadAsync('path/to/skybox/px.jpg'),
-            textureLoader.loadAsync('path/to/skybox/nx.jpg'),
-            textureLoader.loadAsync('path/to/skybox/py.jpg'),
-            textureLoader.loadAsync('path/to/skybox/ny.jpg'),
-            textureLoader.loadAsync('path/to/skybox/pz.jpg'),
-            textureLoader.loadAsync('path/to/skybox/nz.jpg')
-        ]);
-    }
+    // Placeholder for skybox
+    this.skyboxTextures = Array(6).fill(new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=='));
+}
 
     createEnvironment() {
         // Create skybox
